@@ -16,18 +16,15 @@
 
 package org.springframework.cloud.consul.discovery;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
 import lombok.AccessLevel;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.apachecommons.CommonsLog;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.util.InetUtils;
+
+import java.util.*;
 
 /**
  * @author Spencer Gibb
@@ -65,6 +62,8 @@ public class ConsulDiscoveryProperties {
 
 	private Lifecycle lifecycle = new Lifecycle();
 
+	private Filter filter = new Filter();
+
 	/**
 	 * Use ip address rather than hostname during registration
 	 */
@@ -95,5 +94,10 @@ public class ConsulDiscoveryProperties {
 	@Data
 	public class Lifecycle {
 		private boolean enabled = true;
+	}
+
+	@Data
+	public class Filter {
+		private Set<String> tags = new HashSet<>();
 	}
 }

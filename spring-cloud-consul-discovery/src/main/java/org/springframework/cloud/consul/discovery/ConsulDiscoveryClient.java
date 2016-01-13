@@ -16,18 +16,6 @@
 
 package org.springframework.cloud.consul.discovery;
 
-import static org.springframework.cloud.consul.discovery.IpAddressUtils.getCatalogServiceHost;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-
-import org.springframework.boot.autoconfigure.web.ServerProperties;
-import org.springframework.cloud.client.DefaultServiceInstance;
-import org.springframework.cloud.client.ServiceInstance;
-import org.springframework.cloud.client.discovery.DiscoveryClient;
-import org.springframework.util.StringUtils;
-
 import com.ecwid.consul.v1.ConsulClient;
 import com.ecwid.consul.v1.QueryParams;
 import com.ecwid.consul.v1.Response;
@@ -35,8 +23,21 @@ import com.ecwid.consul.v1.agent.model.Member;
 import com.ecwid.consul.v1.agent.model.Self;
 import com.ecwid.consul.v1.agent.model.Service;
 import com.ecwid.consul.v1.catalog.model.CatalogService;
-
+import com.google.common.base.Predicate;
+import com.google.common.collect.FluentIterable;
 import lombok.extern.apachecommons.CommonsLog;
+import org.springframework.boot.autoconfigure.web.ServerProperties;
+import org.springframework.cloud.client.DefaultServiceInstance;
+import org.springframework.cloud.client.ServiceInstance;
+import org.springframework.cloud.client.discovery.DiscoveryClient;
+import org.springframework.util.StringUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import static org.springframework.cloud.consul.discovery.IpAddressUtils.getCatalogServiceHost;
 
 /**
  * @author Spencer Gibb
@@ -108,24 +109,31 @@ public class ConsulDiscoveryClient implements DiscoveryClient {
 	}
 
 	private void addInstancesToList(List<ServiceInstance> instances, String serviceId) {
-		Response<List<CatalogService>> services = client.getCatalogService(serviceId,
-				QueryParams.DEFAULT);
-		for (CatalogService service : services.getValue()) {
+		List<CatalogService> services = client.getCatalogService(serviceId,
+				QueryParams.DEFAULT).getValue();
+
+		final Set<String> filteredTags = properties.getFilter().getTags();
+
+		if (!filteredTags.isEmpty()) {
+			services = FluentIterable.from(services).filter(new Predicate<CatalogService>() {
+				@Override
+				public boolean apply(CatalogService catalogService) {
+					return FluentIterable.from(catalogService.getServiceTags()).anyMatch(new Predicate<String>() {
+						@Override
+						public boolean apply(String tag) {
+							return filteredTags.contains(tag);
+						}
+					});
+				}
+			}).toList();
+		}
+
+		for (CatalogService service : services) {
 			String host = getCatalogServiceHost(service);
 			instances.add(new DefaultServiceInstance(serviceId, host,
-					service.getServicePort(), false));
+					service.getServicePort(), false
+			));
 		}
-	}
-
-	public List<ServiceInstance> getAllInstances() {
-		List<ServiceInstance> instances = new ArrayList<>();
-
-		Response<Map<String, List<String>>> services = client
-				.getCatalogServices(QueryParams.DEFAULT);
-		for (String serviceId : services.getValue().keySet()) {
-			addInstancesToList(instances, serviceId);
-		}
-		return instances;
 	}
 
 	@Override
